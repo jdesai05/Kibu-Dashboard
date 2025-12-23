@@ -162,7 +162,7 @@ def fetch_school_student_stats(
 
     total_sessions = len(sessions)
     completed_sessions = sum(
-        1 for s in sessions if s["status"] == "completed"
+        1 for s in sessions if s["status"] in ("completed", "active")
     )
 
     return {
@@ -204,7 +204,7 @@ def fetch_activity_student_stats(
 
     total_sessions = len(sessions)
     completed_sessions = sum(
-        1 for s in sessions if s["status"] == "completed"
+        1 for s in sessions if s["status"] in ("completed", "active")
     )
 
     return {
