@@ -22,6 +22,8 @@ from teachers_database_fetch import (
     fetch_activities_by_teacher
 )
 
+from study_materials_database_fetch import fetch_study_material_stats
+
 
 # ---------------------------------------------
 # SUPABASE CONFIG
@@ -579,8 +581,92 @@ def add_new_school_form():
 
 def study_material_analytics_page():
     st.header("Study Material Analytics")
-    st.info("🚧 Coming soon")
 
+    # --------------------------------------------------
+    # DATE FILTERS (OPTIONAL)
+    # --------------------------------------------------
+    col1, col2 = st.columns(2)
+
+    with col1:
+        start_date = st.date_input(
+            "Start Date",
+            value=None,
+            key="sm_start_date"
+        )
+
+    with col2:
+        end_date = st.date_input(
+            "End Date",
+            value=None,
+            key="sm_end_date"
+        )
+
+    if start_date and end_date and start_date > end_date:
+        st.error("Start date cannot be after end date.")
+        return
+
+    # --------------------------------------------------
+    # SCHOOL SELECTION
+    # --------------------------------------------------
+    schools = fetch_schools(supabase)
+
+    if not schools:
+        st.warning("No schools found.")
+        return
+
+    school_map = {s["school_name"]: s["id"] for s in schools}
+
+    selected_school = st.selectbox(
+        "Select School",
+        ["Select School"] + list(school_map.keys())
+    )
+
+    if selected_school == "Select School":
+        st.info("Please select a school to view study material analytics.")
+        return
+
+    school_id = school_map[selected_school]
+
+    # --------------------------------------------------
+    # FETCH STATS
+    # --------------------------------------------------
+    with st.spinner("Fetching study material analytics..."):
+        stats = fetch_study_material_stats(
+            supabase,
+            school_id,
+            start_date=start_date if start_date else None,
+            end_date=end_date if end_date else None
+        )
+
+    # --------------------------------------------------
+    # KPI METRICS
+    # --------------------------------------------------
+    st.subheader("Usage Overview")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Flashcards Used", stats["flashcards_count"])
+    col2.metric("Quizzes Used", stats["quiz_count"])
+    col3.metric("Total Tool Runs", stats["total_runs"])
+    col4.metric("Failure Rate", f"{stats['failure_percentage']:.1f}%")
+
+    # --------------------------------------------------
+    # CONTEXTUAL INSIGHT
+    # --------------------------------------------------
+    st.divider()
+
+    if stats["total_runs"] == 0:
+        st.info("No study material usage recorded for the selected period.")
+    else:
+        if stats["failure_percentage"] > 30:
+            st.warning(
+                "⚠️ A high percentage of study material attempts failed. "
+                "Consider reviewing content difficulty or clarity."
+            )
+        else:
+            st.success(
+                "✅ Study material usage is healthy with an acceptable failure rate."
+            )
 
 # ---------------------------------------------
 # MAIN APP
