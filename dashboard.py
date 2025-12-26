@@ -185,22 +185,30 @@ def students_analytics_page():
     st.header("Student Analytics")
 
     # --------------------------------------------------
-    # Date Filters
+    # DATE FILTERS (OPTIONAL)
     # --------------------------------------------------
     col1, col2 = st.columns(2)
 
     with col1:
-        start_date = st.date_input("Start Date", value=None)
+        start_date = st.date_input(
+            "Start Date",
+            value=None,
+            key="student_start_date"
+        )
 
     with col2:
-        end_date = st.date_input("End Date", value=None)
+        end_date = st.date_input(
+            "End Date",
+            value=None,
+            key="student_end_date"
+        )
 
     if start_date and end_date and start_date > end_date:
         st.error("Start date cannot be after end date.")
         return
 
     # --------------------------------------------------
-    # School Selection
+    # SCHOOL SELECTION
     # --------------------------------------------------
     school_id = school_selector(supabase)
 
@@ -209,113 +217,79 @@ def students_analytics_page():
         return
 
     # --------------------------------------------------
-    # SCHOOL-LEVEL STUDENT ANALYTICS
+    # BACKEND IMPORTS (RPC-BASED)
     # --------------------------------------------------
-    from students_database_fetch import (
-        fetch_school_student_stats,
-        fetch_published_activities_by_school,
-        fetch_activity_student_stats
+    from students_stats import (
+        fetch_attempted_sessions_count,
+        fetch_total_published_activities,
+        fetch_completed_sessions_count,
+        fetch_ongoing_sessions_count,
+        fetch_completed_session_median_time
     )
 
-    school_stats = fetch_school_student_stats(
-        supabase,
-        school_id,
-        start_date=start_date,
-        end_date=end_date
+    # --------------------------------------------------
+    # SCHOOL-LEVEL ANALYTICS (RPC)
+    # --------------------------------------------------
+    with st.spinner("Fetching student analytics..."):
+        total_published_activities = fetch_total_published_activities(
+            supabase,
+            school_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        attempted_sessions = fetch_attempted_sessions_count(
+            supabase,
+            school_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        completed_sessions = fetch_completed_sessions_count(
+            supabase,
+            school_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        ongoing_sessions = fetch_ongoing_sessions_count(
+            supabase,
+            school_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+        median_time_spent = fetch_completed_session_median_time(
+            supabase,
+            school_id,
+            start_date=start_date,
+            end_date=end_date
+        )
+
+    # --------------------------------------------------
+    # METRICS DISPLAY
+    # --------------------------------------------------
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    col1.metric("Published Activities", total_published_activities)
+    col2.metric("Sessions Attempted", attempted_sessions)
+    col3.metric("Sessions Completed", completed_sessions)
+    col4.metric("Sessions Ongoing", ongoing_sessions)
+    col5.metric(
+        "Median Time (Minutes)",
+        round(median_time_spent, 1)
     )
 
-    col1, col2, col3, col4 = st.columns(4)
-
-    col1.metric(
-        "Total Activities Posted",
-        school_stats["total_activities_posted"]
-    )
-
-    col2.metric(
-        "Sessions Attempted",
-        school_stats["total_sessions_attempted"]
-    )
-
-    col3.metric(
-        "Completion Rate",
-        f"{school_stats['completion_rate']:.1f}%"
-    )
-
-    col4.metric(
-        "Avg Time Spent (Minutes)",
-        round(school_stats["mean_time_spent"], 1)
-    )
+    # --------------------------------------------------
+    # CONSISTENCY CHECK (OPTIONAL BUT USEFUL)
+    # --------------------------------------------------
+    if attempted_sessions != completed_sessions + ongoing_sessions:
+        st.warning(
+            "⚠️ Data mismatch detected: Attempted ≠ Completed + Ongoing"
+        )
 
     st.caption(
-        f"Median Time Spent: {round(school_stats['median_time_spent'], 1)} Minutes"
-    )
-
-    st.divider()
-
-    # --------------------------------------------------
-    # ACTIVITY SELECTION (Published only)
-    # --------------------------------------------------
-    published_activities = fetch_published_activities_by_school(
-        supabase,
-        school_id,
-        start_date=start_date,
-        end_date=end_date
-    )
-
-    if not published_activities:
-        st.info("No published activities found for this school.")
-        return
-
-    activity_map = {
-        f"{a['name']} ({a['id']})": a["id"]
-        for a in published_activities
-    }
-
-    options = ["Select Activity"] + list(activity_map.keys())
-
-    selected_activity = st.selectbox(
-        "Select an Activity",
-        options
-    )
-
-    if selected_activity == "Select Activity":
-        st.info("Select an activity to view activity-level stats.")
-        return
-
-    activity_id = activity_map[selected_activity]
-
-    # --------------------------------------------------
-    # ACTIVITY-LEVEL STUDENT ANALYTICS
-    # --------------------------------------------------
-    activity_stats = fetch_activity_student_stats(
-        supabase,
-        school_id,
-        activity_id,
-        start_date=start_date,
-        end_date=end_date
-    )
-
-    st.subheader("Activity-Level Student Analytics")
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Sessions Attempted",
-        activity_stats["total_sessions_attempted"]
-    )
-
-    col2.metric(
-        "Completion Rate",
-        f"{activity_stats['completion_rate']:.1f}%"
-    )
-
-    col3.metric(
-        "Avg Time Spent (Minutes)",
-        round(activity_stats["mean_time_spent"], 1)
-    )
-
-    st.caption(
-        f"Median Time Spent: {round(activity_stats['median_time_spent'], 1)} Minutes"
+        "Median time is calculated only for completed sessions."
     )
 
 
